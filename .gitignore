@@ -1,0 +1,14 @@
+# Python 缓存
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# 模拟盘运行数据（含个人账户状态，不上传）
+account.json
+hold_days.json
+
+# 虚拟环境
+venv/
+.venv/
+env/
