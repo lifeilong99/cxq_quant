@@ -182,26 +182,37 @@ class AkShareFeed(DataFeed):
         if zt.empty:
             return []
         out: List[Candidate] = []
+        # 题材采用所属行业做粗分类（东财涨停池无概念题材字段）；
+        # 真正的概念主线需另取板块数据，此处以行业近似，避免把「涨停统计 3/3」误当题材。
         for _, r in zt.iterrows():
             code = str(r.get("代码", "")).zfill(6)
             price = self._to_int(r.get("最新价") * 100) / 100 if r.get("最新价") else 0.0
             self._price_cache[code] = price
+            # 封单比 = 封板资金 / 流通市值（合力验证代理指标）
+            float_mv = float(r.get("流通市值", 0)) if r.get("流通市值") else 0.0
+            seal_fund = float(r.get("封板资金", 0)) if r.get("封板资金") else 0.0
+            seal_ratio = seal_fund / float_mv if float_mv > 0 else 0.0
+            # 一字板近似：首次封板=最后封板=09:25 且炸板次数为 0
+            t0 = str(r.get("首次封板时间", ""))
+            t1 = str(r.get("最后封板时间", ""))
+            is_one_word = (t0 == "092500" and t1 == "092500"
+                           and self._to_int(r.get("炸板次数")) == 0)
             out.append(Candidate(
                 code=code,
                 name=str(r.get("名称", "")),
                 price=price,
                 change_pct=float(r.get("涨跌幅", 0)) / 100 if r.get("涨跌幅") else 0.0,
                 streak=self._to_int(r.get("连板数")),
-                driven=0,  # 东财不提供，策略层按缺失处理
-                board_reason=str(r.get("涨停统计", "")) or str(r.get("所属行业", "")),
-                is_one_word=False,
+                driven=0,  # 东财不提供带动数，策略层按缺失处理
+                board_reason=str(r.get("所属行业", "")) or "其他",
+                is_one_word=is_one_word,
                 broken_times=self._to_int(r.get("炸板次数")),
-                seal_ratio=0.0,
-                auction_change=0.0,
+                seal_ratio=seal_ratio,
+                auction_change=0.0,   # 东财涨停池无竞价字段，保留默认
                 auction_vol_ratio=0.0,
                 prev_broken=False,
                 turnover=float(r.get("换手率", 0)) if r.get("换手率") else 0.0,
-                float_mv=float(r.get("流通市值", 0)) / 1e8 if r.get("流通市值") else 0.0,
+                float_mv=float_mv / 1e8 if float_mv else 0.0,
             ))
         return out
 
